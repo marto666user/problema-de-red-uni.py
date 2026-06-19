@@ -2,23 +2,79 @@ import streamlit as st
 import pulp
 
 
-def resolver_red(puertos_necesarios, ancho_necesario, energia_max):
-    prob = pulp.LpProblem("Universidad_Min_Costo", pulp.LpMinimize)
+def resolver_red(
+    puertos_necesarios,
+    ancho_necesario,
+    energia_max,
+    costo_switch,
+    costo_router,
+    costo_servidor,
+    puertos_switch,
+    puertos_router,
+    ancho_router,
+    ancho_servidor,
+    energia_switch,
+    energia_router,
+    energia_servidor,
+    max_routers,
+    min_servidores,
+):
 
-    x1 = pulp.LpVariable("Switches", lowBound=0, cat="Integer")
-    x2 = pulp.LpVariable("Routers", lowBound=0, cat="Integer")
-    x3 = pulp.LpVariable("Servidores", lowBound=0, cat="Integer")
+    prob = pulp.LpProblem(
+        "Optimizacion_Red",
+        pulp.LpMinimize
+    )
+
+    # Variables de decisión
+    x1 = pulp.LpVariable(
+        "Switches",
+        lowBound=0,
+        cat="Integer"
+    )
+
+    x2 = pulp.LpVariable(
+        "Routers",
+        lowBound=0,
+        cat="Integer"
+    )
+
+    x3 = pulp.LpVariable(
+        "Servidores",
+        lowBound=0,
+        cat="Integer"
+    )
 
     # Función objetivo
-    prob += 65 * x1 + 150 * x2 + 1200 * x3
+    prob += (
+        costo_switch * x1
+        + costo_router * x2
+        + costo_servidor * x3
+    )
 
     # Restricciones
-    prob += 24 * x1 + 4 * x2 >= puertos_necesarios
-    prob += 500 * x2 + 1000 * x3 >= ancho_necesario
-    prob += 15 * x1 + 20 * x2 + 180 * x3 <= energia_max
-    prob += x2 <= 3
-    prob += x3 >= 1
+    prob += (
+        puertos_switch * x1
+        + puertos_router * x2
+        >= puertos_necesarios
+    ), "Puertos"
 
+    prob += (
+        ancho_router * x2
+        + ancho_servidor * x3
+        >= ancho_necesario
+    ), "Ancho_Banda"
+
+    prob += (
+        energia_switch * x1
+        + energia_router * x2
+        + energia_servidor * x3
+        <= energia_max
+    ), "Energia"
+
+    prob += x2 <= max_routers, "Max_Routers"
+    prob += x3 >= min_servidores, "Min_Servidores"
+
+    # Resolver
     prob.solve(pulp.PULP_CBC_CMD(msg=0))
 
     estado = pulp.LpStatus[prob.status]
@@ -35,95 +91,233 @@ def resolver_red(puertos_necesarios, ancho_necesario, energia_max):
     return {"estado": estado}
 
 
-# Interfaz Streamlit
+# ----------------------------
+# INTERFAZ STREAMLIT
+# ----------------------------
+
 st.set_page_config(
-    page_title="Optimizador de Red Universitaria",
+    page_title="Optimizador de Red",
     page_icon="🌐",
-    layout="centered"
+    layout="wide"
 )
 
-st.title("🌐 Optimizador de Red Universitaria")
+st.title("🌐 Optimizador de Infraestructura de Red")
 st.markdown(
-    "Calcula la combinación de equipos de menor costo que cumple "
-    "los requerimientos de la red."
+    "Modificá los parámetros y encontrá la combinación de equipos de menor costo."
 )
 
+# Sidebar
 with st.sidebar:
-    st.header("Parámetros")
+
+    st.header("📋 Requerimientos")
 
     puertos = st.number_input(
         "Puertos necesarios",
         min_value=1,
-        value=494,
-        step=1
+        value=494
     )
 
     ancho = st.number_input(
         "Ancho de banda requerido (Mbps)",
-        min_value=100,
-        value=3800,
-        step=100
+        min_value=1,
+        value=3800
     )
 
     energia = st.number_input(
         "Energía máxima disponible (W)",
-        min_value=100,
-        value=700,
-        step=50
+        min_value=1,
+        value=700
     )
 
-if st.button("Optimizar", type="primary"):
-    resultado = resolver_red(puertos, ancho, energia)
+    st.divider()
+
+    st.header("💲 Costos")
+
+    costo_switch = st.number_input(
+        "Costo por Switch",
+        value=65
+    )
+
+    costo_router = st.number_input(
+        "Costo por Router",
+        value=150
+    )
+
+    costo_servidor = st.number_input(
+        "Costo por Servidor",
+        value=1200
+    )
+
+    st.divider()
+
+    st.header("🔌 Capacidades")
+
+    puertos_switch = st.number_input(
+        "Puertos por Switch",
+        value=24
+    )
+
+    puertos_router = st.number_input(
+        "Puertos por Router",
+        value=4
+    )
+
+    ancho_router = st.number_input(
+        "Mbps por Router",
+        value=500
+    )
+
+    ancho_servidor = st.number_input(
+        "Mbps por Servidor",
+        value=1000
+    )
+
+    st.divider()
+
+    st.header("⚡ Consumo energético")
+
+    energia_switch = st.number_input(
+        "Watts por Switch",
+        value=15
+    )
+
+    energia_router = st.number_input(
+        "Watts por Router",
+        value=20
+    )
+
+    energia_servidor = st.number_input(
+        "Watts por Servidor",
+        value=180
+    )
+
+    st.divider()
+
+    st.header("🚦 Restricciones")
+
+    max_routers = st.number_input(
+        "Máximo de Routers",
+        min_value=0,
+        value=3
+    )
+
+    min_servidores = st.number_input(
+        "Mínimo de Servidores",
+        min_value=0,
+        value=1
+    )
+
+# ----------------------------
+# BOTÓN DE OPTIMIZACIÓN
+# ----------------------------
+
+if st.button("🚀 Optimizar", use_container_width=True):
+
+    resultado = resolver_red(
+        puertos,
+        ancho,
+        energia,
+        costo_switch,
+        costo_router,
+        costo_servidor,
+        puertos_switch,
+        puertos_router,
+        ancho_router,
+        ancho_servidor,
+        energia_switch,
+        energia_router,
+        energia_servidor,
+        max_routers,
+        min_servidores,
+    )
 
     if resultado["estado"] == "Optimal":
-        st.success("Solución óptima encontrada")
 
-        col1, col2, col3 = st.columns(3)
+        st.success("Se encontró una solución óptima.")
 
-        col1.metric(
-            "Switches 24p",
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "Switches",
             resultado["switches"]
         )
 
-        col2.metric(
-            "Routers ONT",
+        c2.metric(
+            "Routers",
             resultado["routers"]
         )
 
-        col3.metric(
-            "Servidores 1U",
+        c3.metric(
+            "Servidores",
             resultado["servidores"]
         )
 
         st.metric(
-            "Costo Total",
+            "💰 Costo Total",
             f"USD ${resultado['costo']:,.2f}"
         )
 
     else:
+
         st.error(
-            f"No existe solución factible. Estado: {resultado['estado']}"
+            f"No existe una solución factible. Estado: {resultado['estado']}"
         )
 
         st.info(
-            "Probá aumentar la energía máxima o reducir los requerimientos."
+            "Probá aumentar la energía máxima, reducir los requerimientos o modificar los parámetros."
         )
 
-st.divider()
+# ----------------------------
+# INFORMACIÓN DEL MODELO
+# ----------------------------
 
-st.subheader("Modelo utilizado")
+with st.expander("📚 Ver modelo matemático"):
 
-st.latex(
-    r"\min Z = 65x_1 + 150x_2 + 1200x_3"
-)
+    st.latex(
+        r"""
+        \min Z =
+        C_sx_1 + C_rx_2 + C_vx_3
+        """
+    )
 
-st.markdown("""
-Sujeto a:
+    st.markdown(
+        """
+**Sujeto a:**
 
-- \(24x_1 + 4x_2 \geq\) Puertos requeridos
-- \(500x_2 + 1000x_3 \geq\) Ancho de banda requerido
-- \(15x_1 + 20x_2 + 180x_3 \leq\) Energía máxima
-- \(x_2 \leq 3\)
-- \(x_3 \geq 1\)
-- Variables enteras
-""")
+- Puertos:
+  
+  \[
+  P_sx_1 + P_rx_2 \geq \text{Puertos requeridos}
+  \]
+
+- Ancho de banda:
+  
+  \[
+  A_rx_2 + A_sx_3 \geq \text{Ancho requerido}
+  \]
+
+- Energía:
+  
+  \[
+  E_sx_1 + E_rx_2 + E_vx_3 \leq \text{Energía máxima}
+  \]
+
+- Routers máximos:
+
+  \[
+  x_2 \leq \text{Máx Routers}
+  \]
+
+- Servidores mínimos:
+
+  \[
+  x_3 \geq \text{Mín Servidores}
+  \]
+
+Variables enteras:
+
+\[
+x_1,x_2,x_3 \in \mathbb{Z}^{+}
+\]
+"""
+    )
